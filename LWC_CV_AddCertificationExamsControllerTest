@@ -1,0 +1,299 @@
+/** 
+ * @description       : Test Class of CV_AddCertificationExamsController Apex Class
+ * @author            : Lorraine Policarpio (lpolicarpio@deloitte.com) 
+ * @last modified on  : 02-28-2023 
+ * @last modified by  : Neil Russel Padilla (npadilla@deloitte.com)
+ * 
+ * Modifications Log 
+ * Ver   Date         Author                                            Modification 
+ * 1.0   02-14-2023   Lorraine Policarpio (lpolicarpio@deloitte.com)    Initial Version 
+ * 2.0   02-28-2023   Neil Russel Padilla (npadilla@deloitte.com)       Use TestDataFactory class
+ * 3.0   03-29-2023   Joana Felisarta (jfelisarta@deloitte.com)         Added methods to test checkDupeCertExams
+**/ 
+
+@isTest
+public class CV_AddCertificationExamsControllerTest {
+    
+    /** 
+    * @description: Prepares the test data needed by the test methods
+    * @author   Lorraine Policarpio (lpolicarpio@deloitte.com) | 02-14-2023 
+    * @param    N/A
+    * @return   N/A
+    **/ 
+    @TestSetup
+    static void makeData(){
+        Account testAcc = CV_TestDataFactory.createAccount('Test Account');
+        insert testAcc;
+
+        Contact testCon = CV_TestDataFactory.createContact('Test Contact', testAcc.Id, null);
+        insert testCon;
+
+        System.runAs(new User(Id=UserInfo.getUserId())) {
+            User testCommunityUser = CV_TestDataFactory.createCommunityUser(testCon.Id);
+        	insert testCommunityUser;
+        }
+        User testUser = [Select Id From User where LastName = 'Test Contact'];
+
+        Offering_Capability__c testOfferingCapability1 = CV_TestDataFactory.createOfferingCapability('Salesforce');
+        insert testOfferingCapability1;
+
+        Offering_Capability__c testOfferingCapability2 = CV_TestDataFactory.createOfferingCapability('SAP');
+        insert testOfferingCapability2;
+
+        Contact_Offering_Capability__c testConOfferingCapability1 = CV_TestDataFactory.createContactOfferingCapability(testCon.Id, testOfferingCapability1.Id, true);
+        insert testConOfferingCapability1;
+
+        Contact_Offering_Capability__c testConOfferingCapability2 = CV_TestDataFactory.createContactOfferingCapability(testCon.Id, testOfferingCapability2.Id, false);
+        insert testConOfferingCapability2;
+
+        System.runAs(testUser) {
+            List<Certification_Exam__c> listOfTestCertExams = new List<Certification_Exam__c>();
+
+            for(integer loopCounter=0; loopCounter<5; loopCounter++){
+                Certification_Exam__c testCertExam = CV_TestDataFactory.createCertificationExam('Salesforce', 'Administrator', 'Administrator II Part ' + loopCounter+1, 600, 'This is a test certification only');
+                listOfTestCertExams.add(testCertExam);
+            }
+
+            for(integer loopCounter=0; loopCounter<3; loopCounter++){
+                Certification_Exam__c testCertExam = CV_TestDataFactory.createCertificationExam('SAP', 'Administrator', 'Administrator III Part ' + loopCounter+1, 500, 'This is a test certification only');
+                listOfTestCertExams.add(testCertExam);
+            }
+
+            insert listOfTestCertExams;
+        }
+    }
+
+    /** 
+    * @description: Tests the CV_AddCertificationExamsController.addNewCertExam() method if a new Certification Exam record is added
+    * @author   Lorraine Policarpio (lpolicarpio@deloitte.com) | 02-14-2023 
+    * @param    N/A
+    * @return   N/A
+    **/ 
+    @isTest
+    static void testAddNewCertExam(){
+        Test.startTest();
+            User testUser = [Select Id From User where LastName = 'Test Contact'];
+
+            System.runAs(testUser) {
+                List<Certification_Exam__c> testCertExams = CV_AddCertificationExamsController.addNewCertExam('Salesforce', 'Developer', 'Test Developer Certification', 700.50, 'Test Certification only');
+                System.assertNotEquals(null, testCertExams.size());
+            }
+        Test.stopTest();
+    }
+
+    /** 
+    * @description: Tests the CV_AddCertificationExamsController.addNewCertExam() method if it throws an error
+    * @author   Lorraine Policarpio (lpolicarpio@deloitte.com) | 02-14-2023 
+    * @param    N/A
+    * @return   N/A
+    **/ 
+    @isTest
+    static void testAddNewCertExamErroneous(){
+        Test.startTest();
+            User testUser = [Select Id From User where LastName = 'Test Contact'];
+
+            System.runAs(testUser) {
+                try{
+                    List<Certification_Exam__c> testCertExams = CV_AddCertificationExamsController.addNewCertExam('Salesforceee', 'Developer', 'Test Developer Certification', 700.50, 'Test Certification only');
+                } catch (AuraHandledException e) {
+                    System.debug('CV_AddCertificationExamsControllerTest Exception: ' + e.getMessage());
+                }   
+            }
+        Test.stopTest();
+    }
+
+    /** 
+    * @description: Tests the CV_AddCertificationExamsController.loadDataFromCSV() method if it processes the CSV file and adds the Certification Exams
+    * @author   Lorraine Policarpio (lpolicarpio@deloitte.com) | 02-14-2023 
+    * @param    N/A
+    * @return   N/A
+    **/ 
+    @isTest
+    static void testLoadDataFromCSV(){    
+        Test.startTest();
+            String staticResource = [SELECT Body FROM StaticResource WHERE Name = 'TestCertExamCSVFile1'].Body.toString();
+            User testUser = [Select Id From User where LastName = 'Test Contact'];
+
+            System.runAs(testUser) {
+                
+                CV_AddCertificationExamsController.CertificationExamWrapper testCertExams = CV_AddCertificationExamsController.loadDataFromCSV('Salesforce', staticResource); 
+                
+                System.assertEquals(8, testCertExams.certExams.size());
+                System.assertEquals(false, testCertExams.dupeExists, 'Newly inserted records without duplicates');
+            }
+        Test.stopTest();
+    }
+
+    /** 
+    * @description: Tests the CV_AddCertificationExamsController.loadDataFromCSV() method if it throws an error
+    * @author   Lorraine Policarpio (lpolicarpio@deloitte.com) | 02-14-2023 
+    * @param    N/A
+    * @return   N/A
+    **/
+    @isTest
+    static void testLoadDataFromCSVErroneous(){
+        Test.startTest();
+            String staticResource = [SELECT Body FROM StaticResource WHERE Name = 'TestCertExamCSVFile1'].Body.toString();
+            User testUser = [Select Id From User where LastName = 'Test Contact'];
+
+            System.runAs(testUser) {
+                try{
+                     CV_AddCertificationExamsController.CertificationExamWrapper testCertExams = CV_AddCertificationExamsController.loadDataFromCSV('Salesforceee', staticResource);
+                } catch (AuraHandledException e) {
+                    System.debug('CV_AddCertificationExamsControllerTest Exception: ' + e.getMessage());
+                }
+            }
+        Test.stopTest();
+    }
+
+    /** 
+    * @description: Tests the CV_AddCertificationExamsController.loadDataFromCSV() method if it throws an error if the header is not the expected one
+    * @author   Lorraine Policarpio (lpolicarpio@deloitte.com) | 02-14-2023 
+    * @param    N/A
+    * @return   N/A
+    **/
+    @isTest
+    static void testLoadDataFromCSVErroneousHeaders(){
+        Test.startTest();
+            String staticResource = [SELECT Body FROM StaticResource WHERE Name = 'TestCertExamCSVFile2'].Body.toString();
+            User testUser = [Select Id From User where LastName = 'Test Contact'];
+
+            System.runAs(testUser) {
+                try{
+                     CV_AddCertificationExamsController.CertificationExamWrapper testCertExams = CV_AddCertificationExamsController.loadDataFromCSV('Salesforce', staticResource);
+                } catch (AuraHandledException e) {
+                    System.assertEquals('Invalid headers. File must be in set in the ff headers: Category, Name, Cost, Description.', e.getMessage());
+                    System.debug('CV_AddCertificationExamsControllerTest Exception: ' + e.getMessage());
+                }
+            }
+        Test.stopTest();
+    }
+
+    /** 
+    * @description: Tests the CV_AddCertificationExamsController.loadDataFromCSV() method if it throws an error if the value is not a numerical one
+    * @author   Lorraine Policarpio (lpolicarpio@deloitte.com) | 02-14-2023 
+    * @param    N/A
+    * @return   N/A
+    **/
+    @isTest
+    static void testLoadDataFromCSVErroneousValue(){
+        Test.startTest();
+            String staticResource = [SELECT Body FROM StaticResource WHERE Name = 'TestCertExamCSVFile3'].Body.toString();
+            User testUser = [Select Id From User where LastName = 'Test Contact'];
+
+            System.runAs(testUser) {
+                try{
+                     CV_AddCertificationExamsController.CertificationExamWrapper testCertExams = CV_AddCertificationExamsController.loadDataFromCSV('Salesforce', staticResource);
+                } catch (AuraHandledException e) {
+                    System.assertEquals('Invalid cost format. Please use a number type.', e.getMessage());
+                    System.debug('CV_AddCertificationExamsControllerTest Exception: ' + e.getMessage());
+                }
+            }
+        Test.stopTest();
+    }
+    
+    /** 
+    * @description: Tests the CV_AddCertificationExamsController.loadDataFromCSV() method to check csv data load with both new records and duplicate records
+    * @author   Joana Felisarta (jfelisarta@deloitte.com) | 03-30-2023 
+    * @param    N/A
+    * @return   N/A
+    **/
+     @isTest
+        static void testLoadDataFromCSV_DuplicateTest(){    
+            Test.startTest();
+                String staticResourceNewRecords = [SELECT Body FROM StaticResource WHERE Name = 'TestCertExamCSVFile1'].Body.toString();
+                String staticResourceWithDupes = [SELECT Body FROM StaticResource WHERE Name = 'TestCertExamCSVFileWithDupeRecords'].Body.toString();
+            	String staticResourceAllDupeRecords = [SELECT Body FROM StaticResource WHERE Name = 'TestCertExamCSVFileAllDupeRecords'].Body.toString();
+                    
+            	User testUser = [Select Id From User where LastName = 'Test Contact'];
+    			
+                System.runAs(testUser) {
+                    //Insert 3 new records
+                    CV_AddCertificationExamsController.CertificationExamWrapper testCertExams = CV_AddCertificationExamsController.loadDataFromCSV('Salesforce', staticResourceNewRecords);
+                    
+                    //Insert 2 new records and 2 duplicates
+                    CV_AddCertificationExamsController.CertificationExamWrapper testCertExamsWithDupes = CV_AddCertificationExamsController.loadDataFromCSV('Salesforce', staticResourceWithDupes);                     
+                    
+                    System.assertEquals(10, testCertExamsWithDupes.certExams.size());
+                    System.assertEquals(true, testCertExamsWithDupes.dupeExists);
+                    
+                    //Test all inserted records are duplicate records
+                    CV_AddCertificationExamsController.CertificationExamWrapper testCertExamsAllDupes = CV_AddCertificationExamsController.loadDataFromCSV('Salesforce', staticResourceAllDupeRecords);  
+                    System.assertEquals(10, testCertExamsAllDupes.certExams.size());
+                    System.assertEquals(true, testCertExamsAllDupes.dupeExists);
+                                      
+                }
+            Test.stopTest();
+        }
+
+    /** 
+    * @description: Tests the CV_AddCertificationExamsController.getCertExamsForMainCapability() method if it retrieves the certifications of the logged in User for their main Capability
+    * @author   Lorraine Policarpio (lpolicarpio@deloitte.com) | 02-14-2023 
+    * @param    N/A
+    * @return   N/A
+    **/
+    @isTest
+    static void testGetCertExamsForMainCapability(){
+        Test.startTest();
+            User testUser = [Select Id From User where LastName = 'Test Contact'];
+
+            System.runAs(testUser) {
+                List<Certification_Exam__c> testCertExams = CV_AddCertificationExamsController.getCertExamsForMainCapability(testUser.Id);
+                System.assertEquals(5, testCertExams.size());
+            }
+        Test.stopTest();
+    }
+
+    /** 
+    * @description: Tests the CV_AddCertificationExamsController.getCertExamsForSelectedCapability() method if it retrieves the certifications of the logged in User for their selected Capability
+    * @author   Lorraine Policarpio (lpolicarpio@deloitte.com) | 02-14-2023 
+    * @param    N/A
+    * @return   N/A
+    **/
+    @isTest
+    static void testGetCertExamsForSelectedCapability(){
+        Test.startTest();
+            User testUser = [Select Id From User where LastName = 'Test Contact'];
+
+            System.runAs(testUser) {
+                List<Certification_Exam__c> testCertExams = CV_AddCertificationExamsController.getCertExamsForSelectedCapability('SAP');
+                System.assertEquals(3, testCertExams.size());
+            }
+        Test.stopTest();
+    }
+    
+    /** 
+    * @description: Tests the CV_AddCertificationExamsController.checkDupeCertExams() method that checks for duplicate Certification Exam
+    * @author   Joana Felisarta (jfelisarta@deloitte.com) | 03-29-2023 
+    * @param    N/A
+    * @return   N/A
+    **/    
+    @isTest
+    static void testCheckDupeCertExams() {       
+        List<Certification_Exam__c> dupeCertExamsList;
+        
+        Certification_Exam__c existingCertExamRec = [SELECT Id, Capability__c, Category__c, Name__c, Cost__c, CV_Description__c FROM Certification_Exam__c LIMIT 1];
+        
+        dupeCertExamsList = CV_AddCertificationExamsController.checkDupeCertExams(existingCertExamRec.Capability__c, existingCertExamRec.Category__c, existingCertExamRec.Name__c);        
+        
+        System.assertEquals(existingCertExamRec.Id, dupeCertExamsList[0].Id, dupeCertExamsList[0].Id + ' input must be a duplicate certification exam record');
+    }
+    
+    /** 
+    * @description: Tests the CV_AddCertificationExamsController.checkDupeCertExams() method for non duplicate records
+    * @author   Joana Felisarta (jfelisarta@deloitte.com) | 03-29-2023 
+    * @param    N/A
+    * @return   N/A
+    **/
+    @isTest
+    static void testCheckNonDupeCertExams() {
+        
+        String selectedCapability = 'Salesforce';
+        String certExamCategory = 'Administrator'; 
+        String certExamName = 'AdminCertAddedByLj'; 
+        
+        List<Certification_Exam__c> dupeCertExamsList = CV_AddCertificationExamsController.checkDupeCertExams(selectedCapability, certExamCategory, certExamName);
+        
+        System.assertEquals(0, dupeCertExamsList.size(), 'No dupe record must be returned');
+    }
+}
