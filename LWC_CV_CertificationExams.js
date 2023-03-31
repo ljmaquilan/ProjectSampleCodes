@@ -281,7 +281,20 @@ export default class cv_certificationExams extends NavigationMixin(LightningElem
         loadDataFromCSV({selectedCapability : this.selectedChildCapability, fileData: this.fileData})
         .then((result) => {
             let returnMessage = '';
-            if(result){
+            if(result.dupeExists){
+                const evt = new ShowToastEvent({
+                    title: 'Duplicate Records Found',
+                    message: 'Duplicate Records Found. Only new records are inserted in the system.',
+                    variant: 'warning',
+                    mode: 'dismissable'
+                });
+
+                this.dispatchEvent(evt);
+                this.isLoaded = false;
+                this.fileData = '';
+                this.certData = result.certExams;
+
+            } else {
                 const evt = new ShowToastEvent({
                     title: 'Success!',
                     message: 'New certificates have been uploaded!',
@@ -291,7 +304,7 @@ export default class cv_certificationExams extends NavigationMixin(LightningElem
                 this.dispatchEvent(evt);
                 this.isLoaded = false;
                 this.fileData = '';
-                this.certData = result;
+                this.certData = result.certExams;
             }
         })
         .catch((error) => {
